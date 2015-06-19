@@ -10,8 +10,10 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.util.Set;
+import java.util.UUID;
 
 
 public class MainActivity extends ActionBarActivity {
@@ -19,6 +21,8 @@ public class MainActivity extends ActionBarActivity {
     TextView statusText;
     private final static int REQUEST_ENABLE_BT = 1;
     public final static String EXTRA_DEVICE_ADDRESS = "device_address";
+    BluetoothAdapter mBluetoothAdapter;
+    private static final UUID OBD_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -28,7 +32,8 @@ public class MainActivity extends ActionBarActivity {
         statusText = (TextView) findViewById(R.id.statusText);
 
 
-        BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+//        BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+        mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
         if (mBluetoothAdapter == null) {
             // Device does not support Bluetooth
             statusText.setText("Bluetooth not supported");
@@ -44,9 +49,13 @@ public class MainActivity extends ActionBarActivity {
             Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
             startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
         }
+        else {
+            continueConnect();
+        }
+    }
 
+    public void continueConnect() {
         statusText.append("\nBluetooth enabled");
-
 //        ArrayAdapter<CharSequence> adapter = new ArrayAdapter<CharSequence>(this, android.R.layout.simple_spinner_dropdown_item);
 //        ArrayAdapter mArrayAdapter = new ArrayAdapter();
 
@@ -56,8 +65,6 @@ public class MainActivity extends ActionBarActivity {
             // Loop through paired devices
             for (BluetoothDevice device : pairedDevices) {
                 statusText.append( "\n" + device.getName() + " : " + device.getAddress() );
-                // Add the name and address to an array adapter to show in a ListView
-//                mArrayAdapter.add(device.getName() + "\n" + device.getAddress());
             }
         }
 
@@ -74,8 +81,29 @@ public class MainActivity extends ActionBarActivity {
 
         // **add this 2 line code**
         Intent myIntent = new Intent(view.getContext(), Connect.class);
+        myIntent.putExtra(EXTRA_DEVICE_ADDRESS, MACaddress);
         startActivityForResult(myIntent, 0);
 
+
+
+
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+
+        if( requestCode == REQUEST_ENABLE_BT )
+        {
+            if( resultCode == RESULT_OK ) {
+                Toast.makeText(MainActivity.this, "Bluetooth enabled.", Toast.LENGTH_SHORT).show();
+                continueConnect();
+            }
+            if( resultCode == RESULT_CANCELED ) {
+                Toast.makeText(MainActivity.this, "Quiting - Bluetooth is disabled.", Toast.LENGTH_LONG).show();
+                finish();
+            }
+        }
+        super.onActivityResult(requestCode, resultCode, data);
     }
 
     @Override
@@ -99,4 +127,5 @@ public class MainActivity extends ActionBarActivity {
 
         return super.onOptionsItemSelected(item);
     }
+
 }
