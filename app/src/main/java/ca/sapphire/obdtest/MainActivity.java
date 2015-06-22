@@ -4,9 +4,11 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.content.Intent;
+import android.os.AsyncTask;
 import android.os.Handler;
 import android.support.v7.app.ActionBarActivity;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -15,21 +17,33 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintStream;
 import java.util.Set;
 import java.util.UUID;
 
 
 public class MainActivity extends ActionBarActivity {
 
+    private static final String TAG = "OBDTest";
+
     TextView statusText;
-    private final static int REQUEST_ENABLE_BT = 1;
-    private final static int REQUEST_CONNECT_BT = 2;
 
     public final static String EXTRA_DEVICE_ADDRESS = "device_address";
     BluetoothAdapter mBluetoothAdapter;
     private static final UUID OBD_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
 
     Handler timerHandler = new Handler();
+    Handler taskHandler = new Handler();
+    boolean isConnected = false;
+
+    BTconnect btConnect;
+
+    public InputStream btIn = null;
+    public PrintStream btOut = null;
+
+    private BluetoothSocket mmSocket = null;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -37,101 +51,18 @@ public class MainActivity extends ActionBarActivity {
         setContentView(R.layout.activity_main);
 
         statusText = (TextView) findViewById(R.id.statusText);
+        timerHandler.postDelayed(timerRunnable, 100);
+        taskHandler.postDelayed(taskRunnable, 100);
 
-
-//        BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-        mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-        if (mBluetoothAdapter == null) {
-            // Device does not support Bluetooth
-            statusText.setText("Bluetooth not supported");
-            return;
-        }
-
-        statusText.setText("Bluetooth supported");
-
-        // cancel discovery, we don't need to do it.
-        mBluetoothAdapter.cancelDiscovery();
-
-        if (!mBluetoothAdapter.isEnabled()) {
-            Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-            startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
-        }
-        else {
-            continueConnect();
-        }
+        btConnect = new BTconnect( statusText, mmSocket );
+        btConnect.execute( "" ).getStatus();
     }
 
-    public void continueConnect() {
-        statusText.append("\nBluetooth enabled");
-//        ArrayAdapter<CharSequence> adapter = new ArrayAdapter<CharSequence>(this, android.R.layout.simple_spinner_dropdown_item);
-//        ArrayAdapter mArrayAdapter = new ArrayAdapter();
-
-        BluetoothDevice btDevice = null;
-        String MACaddress = "00:04:3E:6A:9E:0F";
-
-        Set<BluetoothDevice> pairedDevices = mBluetoothAdapter.getBondedDevices();
-// If there are paired devices
-        if (pairedDevices.size() > 0) {
-            // Loop through paired devices
-            for (BluetoothDevice device : pairedDevices) {
-                statusText.append( "\n" + device.getName() + " : " + device.getAddress() );
-                if (device.getAddress().equals(MACaddress) ) {
-                    btDevice = device;
-
-                }
-            }
-        }
-
-        if( btDevice == null ) {
-            statusText.append( "\nMAC address not matched" );
-            finish();
-        }
-
-        statusText.append( "\nIdentified BT device by MAC address" );
-
-
-        // Create the result Intent and include the MAC address
-//        Intent intent = new Intent();
-//        intent.putExtra(EXTRA_DEVICE_ADDRESS, MACaddress);
-
-        // Set result and finish this Activity
-//        setResult(MainActivity.RESULT_OK, intent);
-
-        /*
-        View view = this.findViewById(android.R.id.content);
-        Intent connectIntent = new Intent(view.getContext(), Connect.class);
-        connectIntent.putExtra(EXTRA_DEVICE_ADDRESS, MACaddress);
-        startActivityForResult(connectIntent, REQUEST_CONNECT_BT);
-*/
-
-        Thread connectThread = new ConnectThread( btDevice );
-        connectThread.run();
-
-    }
 
     public void manageConnectedSocket( BluetoothSocket sock ) {
         Toast.makeText(MainActivity.this, "Bluetooth connected.", Toast.LENGTH_SHORT).show();
 
-        statusText.append("\nBluetooth connected");
-
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-
-        if( requestCode == REQUEST_ENABLE_BT )
-        {
-            if( resultCode == RESULT_OK ) {
-                Toast.makeText(MainActivity.this, "Bluetooth enabled.", Toast.LENGTH_SHORT).show();
-                continueConnect();
-            }
-            if( resultCode == RESULT_CANCELED ) {
-                Toast.makeText(MainActivity.this, "Quiting - Bluetooth is disabled.", Toast.LENGTH_LONG).show();
-                finish();
-            }
-        }
-
-        super.onActivityResult(requestCode, resultCode, data);
+        statusText.append("\nBluetooth connected and ready to go.");
     }
 
     @Override
@@ -156,52 +87,104 @@ public class MainActivity extends ActionBarActivity {
         return super.onOptionsItemSelected(item);
     }
 
-    public class ConnectThread extends Thread {
-        private final BluetoothSocket mmSocket;
-        private final BluetoothDevice mmDevice;
 
+    public int writeCommandSequence = 0;
 
-        public ConnectThread(BluetoothDevice device) {
-            // Use a temporary object that is later assigned to mmSocket,
-            // because mmSocket is final
-            BluetoothSocket tmp = null;
-            mmDevice = device;
-
-            // Get a BluetoothSocket to connect with the given BluetoothDevice
-            try {
-                // MY_UUID is the app's UUID string, also used by the server code
-                tmp = device.createRfcommSocketToServiceRecord(OBD_UUID);
-            } catch (IOException e) { }
-            mmSocket = tmp;
-        }
-
+    Runnable timerRunnable = new Runnable() {
+        @Override
         public void run() {
-            // Cancel discovery because it will slow down the connection
-            mBluetoothAdapter.cancelDiscovery();
+            if( isConnected) {
+                writeStat(obdRead());
+                switch (writeCommandSequence) {
+                    case 0:
+                        obdWrite("AT WS");
+                        writeCommandSequence++;
+                        break;
 
-            try {
-                // Connect the device through the socket. This will block
-                // until it succeeds or throws an exception
-                mmSocket.connect();
-            } catch (IOException connectException) {
-                // Unable to connect; close the socket and get out
-                try {
-                    mmSocket.close();
-                    Toast.makeText(MainActivity.this, "Quiting - Bluetooth is not connected.", Toast.LENGTH_LONG).show();
+                    case 1:
+                        obdWrite("AT I");
+                        writeCommandSequence++;
+                        break;
 
-                } catch (IOException closeException) { }
-                return;
+                    case 2:
+                        obdWrite("AT PPS");
+                        writeCommandSequence++;
+                        break;
+
+                    case 3:
+                        obdWrite("AT RV");
+                        writeCommandSequence++;
+                        break;
+                }
             }
-
-            // Do work to manage the connection (in a separate thread)
-            manageConnectedSocket(mmSocket);
+            timerHandler.postDelayed(this, 100);
         }
+    };
 
-        /** Will cancel an in-progress connection, and close the socket */
-        public void cancel() {
-            try {
-                mmSocket.close();
-            } catch (IOException e) { }
+    public final int taskStart = 0;
+    public final int taskBTConn = 1;
+    public final int taskBTSocks = 2;
+
+    public int taskMode = taskStart;
+
+
+    Runnable taskRunnable = new Runnable() {
+        // handles sequencing oof tasks
+
+        @Override
+        public void run() {
+            switch( taskMode ) {
+                case taskStart:
+                    if (btConnect.getStatus() == AsyncTask.Status.FINISHED) {
+                        taskMode = taskBTConn;
+                    }
+                    break;
+
+                case taskBTConn:
+                    try {
+                        mmSocket = btConnect.getMmSocket();
+                        btIn = mmSocket.getInputStream();
+                        btOut = new PrintStream(mmSocket.getOutputStream());
+                        writeStat("\nInput and Output streams are open.");
+
+                        isConnected = true;
+
+                        // Do work to manage the connection (in a separate thread)
+                        manageConnectedSocket(mmSocket);
+
+                    } catch (IOException e) {
+                        writeStat("\nNot able to open Input and/or Output streams");
+                        e.printStackTrace();
+                    }
+                    taskMode = taskBTSocks;
+                    isConnected = true;
+                    break;
+                default:;
+            }
+            taskHandler.postDelayed(this, 100);
         }
+    };
+
+    public void writeStat( String str ) {
+        statusText.setText( (statusText.getText() + str ) );
     }
+
+    byte[] arrayOfByte = new byte[1023];
+    int bytes;
+
+    public String obdRead() {
+        try {
+            bytes = btIn.read(arrayOfByte);
+            return( new String( arrayOfByte, 0, bytes ) );
+        } catch( IOException e ) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    public void obdWrite( String str ) {
+        btOut.print( str + "\r" );
+        btOut.flush();
+    }
+
 }
