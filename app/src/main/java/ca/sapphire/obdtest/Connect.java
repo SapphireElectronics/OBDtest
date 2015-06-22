@@ -9,7 +9,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Bundle;
+import android.os.Handler;
 import android.util.Log;
+import android.widget.TextView;
 
 import java.io.BufferedOutputStream;
 import java.io.IOException;
@@ -30,8 +32,12 @@ public class Connect extends Activity {
     int bytes;
     private static final UUID OBD_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
 
+    Handler readHandler = new Handler();
+    Handler writeHandler = new Handler();
 
     PrintStream ps;
+
+    TextView statusText;
 
 
     public BluetoothDevice mDevice;
@@ -41,8 +47,9 @@ public class Connect extends Activity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+//        setContentView(R.layout.activity_main);
 
+//        statusText = (TextView) findViewById(R.id.statusText);
 
         try {
             setup();
@@ -85,11 +92,14 @@ public class Connect extends Activity {
         BluetoothDevice zee = BluetoothAdapter.getDefaultAdapter().
                 getRemoteDevice("00:04:3E:6A:9E:0F");// add device mac adress
 
+        setResult( RESULT_OK );
+
         try {
             sock = zee.createRfcommSocketToServiceRecord( OBD_UUID );
         } catch (IOException e1) {
             // TODO Auto-generated catch block
             e1.printStackTrace();
+            setResult(RESULT_CANCELED);
         }
 
         Log.d(TAG, "++++ Connecting");
@@ -98,6 +108,7 @@ public class Connect extends Activity {
         } catch (IOException e1) {
             // TODO Auto-generated catch block
             e1.printStackTrace();
+            setResult(RESULT_CANCELED);
         }
         Log.d(TAG, "++++ Connected");
 
@@ -107,10 +118,12 @@ public class Connect extends Activity {
         } catch (IOException e1) {
             // TODO Auto-generated catch block
             e1.printStackTrace();
+            setResult( RESULT_CANCELED );
         }
 
-        Log.d(TAG, "++++ Listening...");
 
+        Log.d(TAG, "++++ Listening...");
+/*
         OutputStream os = null;
 
         try {
@@ -120,7 +133,29 @@ public class Connect extends Activity {
         }
 
         ps = new PrintStream( os );
+        obdWrite("AT WS");
 
+//        obdWrite("AT WS");
+
+        readHandler.postDelayed(readRunnable, 0);
+        writeHandler.postDelayed(writeRunnable, 0);
+
+        for (int i = 0; i < 20 ; i++) {
+            nap();
+        }
+*/
+
+/*
+        while( ! obdPrompt );
+        obdWrite("AT I");
+
+        while( ! obdPrompt );
+        obdWrite("AT PPS");
+
+        while( ! obdPrompt );
+        obdWrite("AT RV");
+*/
+/*
         obdWrite("AT I");
         nap();
         Log.d(TAG, "[" + obdRead() + "]");
@@ -136,7 +171,7 @@ public class Connect extends Activity {
         nap();
         Log.d(TAG, "[" + obdRead() + "]");
         nap();
-
+*/
 
 /*
         while (true) {
@@ -153,6 +188,7 @@ public class Connect extends Activity {
             }
 */
         Log.d(TAG, "++++ Done: test()");
+
         }
 
     public void nap() {
@@ -166,10 +202,12 @@ public class Connect extends Activity {
     public String obdRead() {
         try {
             bytes = in.read(arrayOfByte);
+            return( new String( arrayOfByte, 0, bytes ) );
         } catch (IOException e1) {
             e1.printStackTrace();
         }
-        return( new String( arrayOfByte, 0, bytes ) );
+        return null;
+//        return( new String( arrayOfByte, 0, bytes ) );
     }
 
     public void obdWrite( String str ) {
@@ -207,5 +245,60 @@ public class Connect extends Activity {
             }
         }
         super.onDestroy();
+    }
+
+    public boolean obdPrompt = false;
+
+    Runnable readRunnable = new Runnable() {
+        @Override
+        public void run() {
+            // read and display data from OBD device
+            String str = obdRead();
+            Log.d(TAG, "[" + str + "]");
+
+//            if( str.contains( ">" ) )
+                obdPrompt = true;
+
+            if( str != null )
+                writeStat( str );
+
+            readHandler.postDelayed(this, 100);
+        }
+
+    };
+
+    public int writeCommandSequence = 0;
+
+    Runnable writeRunnable = new Runnable() {
+        @Override
+        public void run() {
+            switch( writeCommandSequence ) {
+                case 0:
+                    obdWrite("AT WS");
+                    writeCommandSequence++;
+                    break;
+
+                case 1:
+                    obdWrite("AT I");
+                    writeCommandSequence++;
+                    break;
+
+                case 2:
+                    obdWrite("AT PPS");
+                    writeCommandSequence++;
+                    break;
+
+                case 3:
+                    obdWrite("AT RV");
+                    writeCommandSequence++;
+                    break;
+            }
+
+            writeHandler.postDelayed(this, 100);
+        }
+    };
+
+    public void writeStat( String str ) {
+        statusText.setText((str + statusText.getText()).substring(0, 256));
     }
 }
