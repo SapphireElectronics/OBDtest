@@ -8,12 +8,12 @@ import android.util.Log;
 import android.widget.TextView;
 
 import java.io.IOException;
-import java.io.PrintStream;
 import java.util.Set;
 import java.util.UUID;
 
 /**
  * Created by apreston on 6/22/2015.
+ *
  */
 public class BTconnect extends AsyncTask<String, String, Integer> {
     private static final String TAG = "BTconnect";
@@ -21,8 +21,17 @@ public class BTconnect extends AsyncTask<String, String, Integer> {
     TextView statusText;
 
     BluetoothAdapter mBluetoothAdapter;
-    private BluetoothSocket mmSocket;
+    public BluetoothSocket mmSocket;
     private static final UUID OBD_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
+
+    private static final int BT_CONNECT_OK = 1;
+    private static final int BT_NOT_SUPPORTED = 2;
+    private static final int BT_NOT_ENABLED = 3;
+    private static final int BT_MAC_NOT_MATCHED = 4;
+    private static final int BT_NOT_CONNECTED = 5;
+
+
+    public boolean connected = false;
 
     public BTconnect( TextView status, BluetoothSocket mmSocket )
     {
@@ -32,25 +41,25 @@ public class BTconnect extends AsyncTask<String, String, Integer> {
     }
 
     protected Integer doInBackground( String... MACs ) {
-        Log.i(TAG, "In BTconnect run()");
+        onProgressUpdate( "\nIn BTconnect run()");
 
         // check if Bluetooth is supported
         mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
         if (mBluetoothAdapter == null) {
             // Device does not support Bluetooth
-            publishProgress("Bluetooth not supported");
-            return 0;
+            publishProgress("\nBluetooth not supported");
+            return BT_NOT_SUPPORTED;
         }
 
-        publishProgress("Bluetooth supported");
+        publishProgress("\nBluetooth supported");
 
         // cancel discovery, we don't need to do it.
         mBluetoothAdapter.cancelDiscovery();
 
 
         if (!mBluetoothAdapter.isEnabled()) {
-            publishProgress("Bluetooth not enabled.");
-            return -1;
+            publishProgress("\nBluetooth not enabled.");
+            return BT_NOT_ENABLED;
 //            Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
 //            startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
         }
@@ -78,7 +87,7 @@ public class BTconnect extends AsyncTask<String, String, Integer> {
 
         if (btDevice == null) {
             publishProgress("\nMAC address not matched");
-            return (0);
+            return BT_MAC_NOT_MATCHED;
         }
 
         publishProgress("\nIdentified BT device by MAC address");
@@ -90,10 +99,13 @@ public class BTconnect extends AsyncTask<String, String, Integer> {
             // MY_UUID is the app's UUID string, also used by the server code
             tmp = btDevice.createRfcommSocketToServiceRecord(OBD_UUID);
         } catch (IOException e) {
+            e.printStackTrace();
         }
         mmSocket = tmp;
+        publishProgress( "\nCreated RFcomm socked.");
 
         mBluetoothAdapter.cancelDiscovery();
+        publishProgress( "\nCancelled discovery");
 
         try {
             // Connect the device through the socket. This will block
@@ -104,14 +116,15 @@ public class BTconnect extends AsyncTask<String, String, Integer> {
             try {
                 mmSocket.close();
                 publishProgress("\nBluetooth device is not connected");
-                return (0);
+                return BT_NOT_CONNECTED;
             } catch (IOException closeException) {
+                closeException.printStackTrace();
             }
 
             // at this point, we have a connection to the actual BT device, so we can open in and out streams
         }
-
-        return 1;
+        publishProgress( "\nConnected.");
+        return BT_CONNECT_OK;
     }
 
     protected void onProgressUpdate(String... str) {
@@ -119,10 +132,31 @@ public class BTconnect extends AsyncTask<String, String, Integer> {
         statusText.append(str[0]);
     }
 
+    protected void onPostExecute(Integer status) {
+        Log.i(TAG, "Finished ConnectBT: " + status);
+
+        if( status == BT_CONNECT_OK ) {
+            connected = true;
+            statusText.append( "BT Connected and ready.");
+        }
+        else {
+            connected = false;
+            statusText.append( "BT not ready.");
+        }
+    }
+
+    protected void onCancelled() {
+        try {
+            mmSocket.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        Log.i(TAG, "BT Connect cancelled");
+        statusText.append("BT Connect cancelled");
+
+    }
+
     public BluetoothSocket getMmSocket() {
         return mmSocket;
     }
-
-
-
 }

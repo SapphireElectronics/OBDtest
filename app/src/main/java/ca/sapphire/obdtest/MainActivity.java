@@ -1,37 +1,27 @@
 package ca.sapphire.obdtest;
 
-import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
-import android.content.Intent;
 import android.os.AsyncTask;
 import android.os.Handler;
-import android.support.v7.app.ActionBarActivity;
 import android.os.Bundle;
-import android.util.Log;
+import android.support.v7.app.AppCompatActivity;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.View;
-import android.widget.ArrayAdapter;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintStream;
-import java.util.Set;
+import java.util.Random;
 import java.util.UUID;
 
 
-public class MainActivity extends ActionBarActivity {
+public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "OBDTest";
 
     TextView statusText;
-
-    public final static String EXTRA_DEVICE_ADDRESS = "device_address";
-    BluetoothAdapter mBluetoothAdapter;
-    private static final UUID OBD_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
 
     Handler timerHandler = new Handler();
     Handler taskHandler = new Handler();
@@ -44,6 +34,7 @@ public class MainActivity extends ActionBarActivity {
 
     private BluetoothSocket mmSocket = null;
 
+    GridView gridView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -56,14 +47,19 @@ public class MainActivity extends ActionBarActivity {
 
         btConnect = new BTconnect( statusText, mmSocket );
         btConnect.execute( "" ).getStatus();
+
+        // TODO: Remove this.
+//        goofAroundWithGraphics();
+    }
+
+    public void goofAroundWithGraphics() {
+        gridView = new GridView( this, 16, 16 );
+        setContentView(gridView);
     }
 
 
-    public void manageConnectedSocket( BluetoothSocket sock ) {
-        Toast.makeText(MainActivity.this, "Bluetooth connected.", Toast.LENGTH_SHORT).show();
 
-        statusText.append("\nBluetooth connected and ready to go.");
-    }
+
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -124,24 +120,53 @@ public class MainActivity extends ActionBarActivity {
     public final int taskStart = 0;
     public final int taskBTConn = 1;
     public final int taskBTSocks = 2;
+    public final int taskCancel = 3;
 
     public int taskMode = taskStart;
 
+    public int passes = 0;
 
     Runnable taskRunnable = new Runnable() {
         // handles sequencing oof tasks
 
+        public int timeout = 0;
+
         @Override
         public void run() {
+
+//            Random r = new Random();
+//
+//            for (int i = 0; i < 32; i++) {
+//                gridView.elementInc(r.nextInt(255));
+//
+//                if( ++passes > 255 ) {
+//                    passes = 0;
+//                    gridView.decAll();
+//                }
+//
+//            }
+//
+//            gridView.invalidate();
+
             switch( taskMode ) {
                 case taskStart:
                     if (btConnect.getStatus() == AsyncTask.Status.FINISHED) {
                         taskMode = taskBTConn;
                     }
+                    else {
+                        if( ++timeout > 50 ) {
+                            writeStat("\nTimeout on BT connect.");
+                            btConnect.cancel(true);
+                            taskMode = taskCancel;
+                        }
+                    }
                     break;
 
                 case taskBTConn:
                     try {
+                        if( !btConnect.connected )
+                            break;
+
                         mmSocket = btConnect.getMmSocket();
                         btIn = mmSocket.getInputStream();
                         btOut = new PrintStream(mmSocket.getOutputStream());
@@ -159,6 +184,10 @@ public class MainActivity extends ActionBarActivity {
                     taskMode = taskBTSocks;
                     isConnected = true;
                     break;
+
+                case taskCancel:
+                    break;
+
                 default:;
             }
             taskHandler.postDelayed(this, 100);
@@ -166,7 +195,13 @@ public class MainActivity extends ActionBarActivity {
     };
 
     public void writeStat( String str ) {
-        statusText.setText( (statusText.getText() + str ) );
+        statusText.append( str );
+    }
+
+    public void manageConnectedSocket( BluetoothSocket sock ) {
+        Toast.makeText(MainActivity.this, "Bluetooth connected.", Toast.LENGTH_SHORT).show();
+
+        statusText.append("\nBack in main thread.");
     }
 
     byte[] arrayOfByte = new byte[1023];
@@ -175,6 +210,8 @@ public class MainActivity extends ActionBarActivity {
     public String obdRead() {
         try {
             bytes = btIn.read(arrayOfByte);
+            if( bytes <= 0 )
+                return null;
             return( new String( arrayOfByte, 0, bytes ) );
         } catch( IOException e ) {
             e.printStackTrace();
@@ -185,6 +222,7 @@ public class MainActivity extends ActionBarActivity {
     public void obdWrite( String str ) {
         btOut.print( str + "\r" );
         btOut.flush();
+        writeStat( str + "\r" );
     }
 
 }
