@@ -1,15 +1,22 @@
 package ca.sapphire.obdtest;
 
+import android.app.Activity;
 import android.bluetooth.BluetoothSocket;
+import android.content.Context;
 import android.os.AsyncTask;
 import android.os.Handler;
 import android.os.Bundle;
+import android.os.Looper;
+import android.os.Message;
 import android.support.v7.app.AppCompatActivity;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
+import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintStream;
@@ -22,9 +29,12 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "OBDTest";
 
     TextView statusText;
+    Button connectButton;
 
     Handler timerHandler = new Handler();
     Handler taskHandler = new Handler();
+    Handler mHandler;
+
     boolean isConnected = false;
 
     BTconnect btConnect;
@@ -42,6 +52,10 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         statusText = (TextView) findViewById(R.id.statusText);
+        connectButton = (Button) findViewById(R.id.connectButton);
+
+        addListenerOnConnectButton( this );
+
         timerHandler.postDelayed(timerRunnable, 100);
         taskHandler.postDelayed(taskRunnable, 100);
 
@@ -52,14 +66,28 @@ public class MainActivity extends AppCompatActivity {
 //        goofAroundWithGraphics();
     }
 
+    public void addListenerOnConnectButton( final Activity mActivity ) {
+        connectButton.setOnClickListener(new View.OnClickListener() {
+
+            @Override
+            public void onClick(View v) {
+//                statusText = (TextView) v.findViewById(R.id.statusText);
+                mActivity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        btConnect = new BTconnect(statusText, mmSocket);
+                        btConnect.execute("").getStatus();
+                    }
+                });
+                taskMode = taskConnect;
+            }
+        });
+    }
+
     public void goofAroundWithGraphics() {
         gridView = new GridView( this, 16, 16 );
         setContentView(gridView);
     }
-
-
-
-
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -118,18 +146,22 @@ public class MainActivity extends AppCompatActivity {
     };
 
     public final int taskStart = 0;
+    public final int taskConnect = 4;
     public final int taskBTConn = 1;
     public final int taskBTSocks = 2;
     public final int taskCancel = 3;
+    public final int taskHalt = 5;
 
-    public int taskMode = taskStart;
+    public int taskMode = taskConnect;
 
-    public int passes = 0;
 
     Runnable taskRunnable = new Runnable() {
         // handles sequencing oof tasks
 
         public int timeout = 0;
+        public int retries = 0;
+
+
 
         @Override
         public void run() {
@@ -149,6 +181,14 @@ public class MainActivity extends AppCompatActivity {
 //            gridView.invalidate();
 
             switch( taskMode ) {
+                // start the Bluetooth connect process
+                case taskConnect:
+//                    btConnect = new BTconnect( statusText, mmSocket );
+//                    btConnect.execute( "" ).getStatus();
+//                    taskMode = taskStart;
+                    timeout = 0;
+                    break;
+
                 case taskStart:
                     if (btConnect.getStatus() == AsyncTask.Status.FINISHED) {
                         taskMode = taskBTConn;
@@ -186,6 +226,18 @@ public class MainActivity extends AppCompatActivity {
                     break;
 
                 case taskCancel:
+                    if (btConnect.getStatus() == AsyncTask.Status.FINISHED) {
+                        if(  ++retries < 3 ) {
+                            writeStat( "\n\nRetry = " + retries );
+                        }
+
+
+
+                        taskMode = taskHalt;
+                    }
+                    break;
+
+                case taskHalt:
                     break;
 
                 default:;

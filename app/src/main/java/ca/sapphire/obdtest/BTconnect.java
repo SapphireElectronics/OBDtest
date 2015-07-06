@@ -56,12 +56,11 @@ public class BTconnect extends AsyncTask<String, String, Integer> {
         // cancel discovery, we don't need to do it.
         mBluetoothAdapter.cancelDiscovery();
 
-
         if (!mBluetoothAdapter.isEnabled()) {
             publishProgress("\nBluetooth not enabled.");
             return BT_NOT_ENABLED;
-//            Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-//            startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
+            //            Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+            //            startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
         }
 
         publishProgress("\nBluetooth enabled");
@@ -82,8 +81,8 @@ public class BTconnect extends AsyncTask<String, String, Integer> {
             }
         }
 
-// TODO: Can also get the device this way:
-//        btDevice = mBluetoothAdapter.getDefaultAdapter().getRemoteDevice( MACaddress );
+        // TODO: Can also get the device this way:
+        //        btDevice = mBluetoothAdapter.getDefaultAdapter().getRemoteDevice( MACaddress );
 
         if (btDevice == null) {
             publishProgress("\nMAC address not matched");
@@ -102,10 +101,10 @@ public class BTconnect extends AsyncTask<String, String, Integer> {
             e.printStackTrace();
         }
         mmSocket = tmp;
-        publishProgress( "\nCreated RFcomm socked.");
+        publishProgress("\nCreated RFcomm socked.");
 
         mBluetoothAdapter.cancelDiscovery();
-        publishProgress( "\nCancelled discovery");
+        publishProgress("\nCancelled discovery");
 
         try {
             // Connect the device through the socket. This will block
@@ -123,13 +122,13 @@ public class BTconnect extends AsyncTask<String, String, Integer> {
 
             // at this point, we have a connection to the actual BT device, so we can open in and out streams
         }
-        publishProgress( "\nConnected.");
+        publishProgress("\nConnected.");
         return BT_CONNECT_OK;
     }
 
     protected void onProgressUpdate(String... str) {
         Log.i(TAG, "Process:" + str[0]);
-        statusText.append(str[0]);
+//        statusText.append(str[0]);
     }
 
     protected void onPostExecute(Integer status) {
@@ -137,11 +136,11 @@ public class BTconnect extends AsyncTask<String, String, Integer> {
 
         if( status == BT_CONNECT_OK ) {
             connected = true;
-            statusText.append( "BT Connected and ready.");
+            statusText.append( "\nBT Connected and ready.");
         }
         else {
             connected = false;
-            statusText.append( "BT not ready.");
+            statusText.append( "\nBT not ready.");
         }
     }
 
@@ -152,7 +151,7 @@ public class BTconnect extends AsyncTask<String, String, Integer> {
             e.printStackTrace();
         }
         Log.i(TAG, "BT Connect cancelled");
-        statusText.append("BT Connect cancelled");
+        statusText.append("\nBT Connect cancelled");
 
     }
 
