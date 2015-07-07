@@ -4,6 +4,7 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.os.AsyncTask;
+import android.os.Looper;
 import android.util.Log;
 import android.widget.TextView;
 
@@ -128,6 +129,10 @@ public class BTconnect extends AsyncTask<String, String, Integer> {
 
     protected void onProgressUpdate(String... str) {
         Log.i(TAG, "Process:" + str[0]);
+
+        if(Looper.myLooper() == Looper.getMainLooper()) {
+            statusText.append(str[0]);
+        }
 //        statusText.append(str[0]);
     }
 

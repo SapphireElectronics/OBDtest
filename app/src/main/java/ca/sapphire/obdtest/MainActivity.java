@@ -54,16 +54,25 @@ public class MainActivity extends AppCompatActivity {
         statusText = (TextView) findViewById(R.id.statusText);
         connectButton = (Button) findViewById(R.id.connectButton);
 
-        addListenerOnConnectButton( this );
+        addListenerOnConnectButton(this);
 
         timerHandler.postDelayed(timerRunnable, 100);
         taskHandler.postDelayed(taskRunnable, 100);
 
-        btConnect = new BTconnect( statusText, mmSocket );
-        btConnect.execute( "" ).getStatus();
+        tryBTconnect();
+
+//        btConnect = new BTconnect( statusText, mmSocket );
+//        btConnect.execute( "" ).getStatus();
 
         // TODO: Remove this.
 //        goofAroundWithGraphics();
+    }
+
+    public void tryBTconnect() {
+//        statusText = (TextView) findViewById(R.id.statusText);
+        btConnect = new BTconnect(statusText, mmSocket);
+        btConnect.execute("").getStatus();
+        taskMode = taskConnect;
     }
 
     public void addListenerOnConnectButton( final Activity mActivity ) {
@@ -71,15 +80,7 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onClick(View v) {
-//                statusText = (TextView) v.findViewById(R.id.statusText);
-                mActivity.runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        btConnect = new BTconnect(statusText, mmSocket);
-                        btConnect.execute("").getStatus();
-                    }
-                });
-                taskMode = taskConnect;
+                tryBTconnect();
             }
         });
     }
@@ -183,22 +184,21 @@ public class MainActivity extends AppCompatActivity {
             switch( taskMode ) {
                 // start the Bluetooth connect process
                 case taskConnect:
-//                    btConnect = new BTconnect( statusText, mmSocket );
-//                    btConnect.execute( "" ).getStatus();
-//                    taskMode = taskStart;
+                    taskMode = taskStart;
                     timeout = 0;
                     break;
 
                 case taskStart:
-                    if (btConnect.getStatus() == AsyncTask.Status.FINISHED) {
-                        taskMode = taskBTConn;
-                    }
-                    else {
-                        if( ++timeout > 50 ) {
-                            writeStat("\nTimeout on BT connect.");
-                            btConnect.cancel(true);
-                            taskMode = taskCancel;
+                    if( btConnect != null ) {
+                        if (btConnect.getStatus() == AsyncTask.Status.FINISHED) {
+                            taskMode = taskBTConn;
+                            break;
                         }
+                    }
+                    if( ++timeout > 50 ) {
+                        writeStat("\nTimeout on BT connect.");
+                        btConnect.cancel(true);
+                        taskMode = taskCancel;
                     }
                     break;
 
@@ -227,6 +227,7 @@ public class MainActivity extends AppCompatActivity {
 
                 case taskCancel:
                     if (btConnect.getStatus() == AsyncTask.Status.FINISHED) {
+                        writeStat("\nMain thread :: Not connected");
                         if(  ++retries < 3 ) {
                             writeStat( "\n\nRetry = " + retries );
                         }
