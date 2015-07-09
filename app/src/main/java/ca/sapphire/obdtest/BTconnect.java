@@ -110,7 +110,8 @@ public class BTconnect extends AsyncTask<String, String, Integer> {
         try {
             // Connect the device through the socket. This will block
             // until it succeeds or throws an exception
-            mmSocket.connect();
+            if( !mmSocket.isConnected() )
+                mmSocket.connect();
         } catch (IOException connectException) {
             // Unable to connect; close the socket and get out
             try {
@@ -154,6 +155,8 @@ public class BTconnect extends AsyncTask<String, String, Integer> {
             mmSocket.close();
         } catch (IOException e) {
             e.printStackTrace();
+        } catch (NullPointerException e1) {
+            e1.printStackTrace();
         }
         Log.i(TAG, "BT Connect cancelled");
         statusText.append("\nBT Connect cancelled");
