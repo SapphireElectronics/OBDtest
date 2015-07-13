@@ -3,7 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="fill_parent"
     android:layout_height="fill_parent"
-    android:weightSum="4"
+    android:weightSum="8"
     android:orientation="vertical"
     android:paddingLeft="@dimen/activity_horizontal_margin"
     android:paddingRight="@dimen/activity_horizontal_margin"
@@ -16,13 +16,12 @@
         android:text=""
         android:layout_width="fill_parent"
         android:layout_height="fill_parent"
-        android:layout_weight="3"
+        android:layout_weight="7"
         />
 
     <TextView
         android:id="@+id/RxText"
         android:text=""
-        android:layout_below="@id/TxText"
         android:layout_width="fill_parent"
         android:layout_height="fill_parent"
         android:layout_weight= "1"

@@ -32,10 +32,14 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "OBDTest";
 
     TextView statusText;
+    TextView txText;
     Button connectButton;
+    Button monitorButton;
+    Button clearButton;
 
-    Handler timerHandler = new Handler();
-    Handler taskHandler = new Handler();
+    Handler isHandler = new Handler();
+    Handler osHandler = new Handler();
+    Handler connectHandler = new Handler();
     Handler mHandler;
 
     boolean isConnected = false;
@@ -56,12 +60,21 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         statusText = (TextView) findViewById(R.id.statusText);
+        txText = (TextView) findViewById(R.id.TxText);
+        statusText.setTextColor( 0xff008000 );  // Green
+        txText.setTextColor( 0xff000080 );      // Blue
+
         connectButton = (Button) findViewById(R.id.connectButton);
+        monitorButton = (Button) findViewById(R.id.monitorButton);
+        clearButton = (Button) findViewById(R.id.clearButton);
 
         addListenerOnConnectButton(this);
+        addListenerOnMonitorButton(this);
+        addListenerOnClearButton(this);
 
-        timerHandler.postDelayed(timerRunnable, 100);
-        taskHandler.postDelayed(taskRunnable, 100);
+//        isHandler.postDelayed(isRunnable, 100);
+//        osHandler.postDelayed(osRunnable, 100);
+        connectHandler.postDelayed(connectRunnable, 100);
 
         tryBTconnect();
 
@@ -73,12 +86,32 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void tryBTconnect() {
-//        statusText = (TextView) findViewById(R.id.statusText);
-        statusText.setText( "" );
+        if( isConnected )
+            return;
+
+        statusText.setText("");
         btConnect = new BTconnect(statusText, mmSocket);
         btConnect.execute("").getStatus();
         timeout = 0;
         tryConnect = true;
+    }
+
+    public boolean monitor = false;
+
+    public void toggleMonitor() {
+        if( !isConnected ) return;
+
+        monitor = !monitor;
+
+        if( monitor ) {
+            obdWrite( "AT MA" );
+            monitorButton.setText( "Stop Monitor");
+        }
+        else {
+            obdWrite( "." );
+            monitorButton.setText("Start Monitor");
+        }
+
     }
 
     public void addListenerOnConnectButton( final Activity mActivity ) {
@@ -90,6 +123,28 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
+
+    public void addListenerOnMonitorButton( final Activity mActivity ) {
+        monitorButton.setOnClickListener(new View.OnClickListener() {
+
+            @Override
+            public void onClick(View v) {
+                toggleMonitor();
+            }
+        });
+    }
+
+    public void addListenerOnClearButton( final Activity mActivity ) {
+        clearButton.setOnClickListener(new View.OnClickListener() {
+
+            @Override
+            public void onClick(View v) {
+                statusText.setText( "" );
+                txText.setText( "" );
+            }
+        });
+    }
+
 
     public void goofAroundWithGraphics() {
         gridView = new GridView( this, 16, 16 );
@@ -121,15 +176,15 @@ public class MainActivity extends AppCompatActivity {
 
     public int writeCommandSequence = 0;
 
-    Runnable timerRunnable = new Runnable() {
+    Runnable osRunnable = new Runnable() {
         @Override
         public void run() {
             if( isConnected) {
-                writeBtIn(obdRead());
+//                writeBtIn(obdRead());
                 switch (writeCommandSequence) {
                     case 0:
                         writeStat("\n");
-                        obdWrite("AT WS");
+                        obdWrite("AT WS");      // warm start
                         writeCommandSequence++;
                         break;
 
@@ -139,7 +194,7 @@ public class MainActivity extends AppCompatActivity {
 
                         prompt = false;
                         writeStat( "\n" );
-                        obdWrite("AT I");
+                        obdWrite("AT SP 2");        // set protocol 2: J1850 VPW
                         writeCommandSequence++;
                         break;
 
@@ -149,7 +204,7 @@ public class MainActivity extends AppCompatActivity {
 
                         prompt = false;
                         writeStat( "\n" );
-                        obdWrite("AT PPS");
+                        obdWrite("AT H1");          // show headers
                         writeCommandSequence++;
                         break;
 
@@ -159,18 +214,33 @@ public class MainActivity extends AppCompatActivity {
 
                         prompt = false;
                         writeStat( "\n" );
-                        obdWrite("AT RV");
+                        obdWrite("AT I");          // show info
                         writeCommandSequence++;
                         break;
+
                 }
             }
-            timerHandler.postDelayed(this, 200);
+            osHandler.postDelayed(this, 200);
         }
     };
 
+    String rxStr = null;
+
+    Runnable isRunnable = new Runnable() {
+        @Override
+        public void run() {
+            rxStr = obdRead();
+            if( rxStr  != null ) {
+                statusText.append( rxStr );
+            }
+            isHandler.postDelayed(this, 50);
+        }
+    };
+
+
     public int timeout = 0;
 
-    Runnable taskRunnable = new Runnable() {
+    Runnable connectRunnable = new Runnable() {
         // TODO: Stop running this thread when no longer needed, as in: we're connected or waiting on the Connect button click
         // handles sequencing oof tasks
 
@@ -231,7 +301,9 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
             }
-            taskHandler.postDelayed(this, 100);
+            // only keep the connect handler running if we are not yet connected
+            if( !isConnected )
+                connectHandler.postDelayed(this, 100);
         }
     };
 
@@ -245,9 +317,14 @@ public class MainActivity extends AppCompatActivity {
 
         statusText.append("\nBack in main thread.");
 
-        Intent myIntent = new Intent(this, TerminalActivity.class);
+        //start input and output handlers
+        isHandler.postDelayed(isRunnable, 10);
+        osHandler.postDelayed(osRunnable, 10);
+
+//        Intent myIntent = new Intent(this, TerminalActivity.class);
+//        myIntent.putExtra( "is", mmSocket );
 //        myIntent.putExtra("key", value); //Optional parameters
-        startActivity(myIntent);
+//        startActivity(myIntent);
     }
 
 //    byte[] arrayOfByte = new byte[1023];
@@ -285,19 +362,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void writeBtIn( String str ) {
-        int clr = statusText.getCurrentTextColor();
-        statusText.setTextColor(Color.GREEN );
         writeStat(str);
-        statusText.setTextColor( clr );
-
     }
 
     public void writeBtOut( String str ) {
-        int clr = statusText.getCurrentTextColor();
-        statusText.setTextColor(Color.BLUE );
-        writeStat(str + "\n");
-        statusText.setTextColor(clr);
-
+        txText.append( str + "\n" );
     }
 
 }
